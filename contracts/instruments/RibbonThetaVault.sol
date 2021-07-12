@@ -13,6 +13,7 @@ import {
 } from "../adapters/IProtocolAdapter.sol";
 import {ProtocolAdapter} from "../adapters/ProtocolAdapter.sol";
 import {IRibbonFactory} from "../interfaces/IRibbonFactory.sol";
+import {IRibbonV2Vault} from "../interfaces/IRibbonV2Vault.sol";
 import {IWETH} from "../interfaces/IWETH.sol";
 import {ISwap, Types} from "../interfaces/ISwap.sol";
 import {OtokenInterface} from "../interfaces/GammaInterface.sol";
@@ -74,6 +75,8 @@ contract RibbonThetaVault is DSMath, OptionsVaultStorage {
     event ScheduleWithdraw(address account, uint256 shares);
 
     event ScheduledWithdrawCompleted(address account, uint256 amount);
+
+    event VaultSunset(address replacement);
 
     /**
      * @notice Initializes the contract with immutable variables
@@ -151,6 +154,18 @@ contract RibbonThetaVault is DSMath, OptionsVaultStorage {
         // hardcode the initial withdrawal fee
         instantWithdrawalFee = 0.005 ether;
         feeRecipient = _feeRecipient;
+    }
+
+    /**
+     * @notice Closes the vault and makes it withdraw only.
+     */
+    function sunset(address upgradeTo) external onlyOwner {
+        cap = 0;
+        replacementVault = upgradeTo;
+        isSunset = true;
+        instantwithdrawalfee = 0;
+
+        emit VaultSunset(replacementVault);
     }
 
     /**
@@ -329,6 +344,17 @@ contract RibbonThetaVault is DSMath, OptionsVaultStorage {
     }
 
     /**
+     * @notice Moves msg.sender's deposited funds to new vault w/o fees
+     */
+    function migrate() external nonReentrant {
+        require(isSunset, "Can only migrate from closed vaults");
+        require(replacementVault != address(0), "No vault to migrate to");
+
+        uint256 amountAfterFee = _withdraw(maxWithdrawableShares(), false);
+        IRibbonV2Vault(replacementVault).depositFor(amountAfterFee, msg.sender);
+    }
+
+    /**
      * @notice Sets the next option the vault will be shorting, and closes the existing short.
      *         This allows all the users to withdraw if the next option is malicious.
      */
@@ -413,6 +439,7 @@ contract RibbonThetaVault is DSMath, OptionsVaultStorage {
             block.timestamp >= nextOptionReadyAt,
             "Cannot roll before delay"
         );
+        require(!isSunset, "Sunset vaults cannot create new positions");
 
         address newOption = nextOption;
         require(newOption != address(0), "No found option");

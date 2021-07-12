@@ -51,17 +51,29 @@ contract OptionsVaultStorageV1 is
 }
 
 contract OptionsVaultStorageV2 {
-    // Amount locked for scheduled withdrawals;
+    // Amount locked for scheduled withdrawals
     uint256 public queuedWithdrawShares;
 
     // Mapping to store the scheduled withdrawals (address => withdrawAmount)
     mapping(address => uint256) public scheduledWithdrawals;
 }
 
+contract OptionsVaultStorageV3 {
+    // Amount locked for scheduled withdrawals
+    bool public isSunset;
+
+    // Contract address of replacement
+    address public replacementVault;
+}
+
 // We are following Compound's method of upgrading new contract implementations
 // When we need to add new storage variables, we create a new version of OptionsVaultStorage
 // e.g. OptionsVaultStorageV<versionNumber>, so finally it would look like
 // contract OptionsVaultStorage is OptionsVaultStorageV1, OptionsVaultStorageV2
-contract OptionsVaultStorage is OptionsVaultStorageV1, OptionsVaultStorageV2 {
+contract OptionsVaultStorage is
+    OptionsVaultStorageV1,
+    OptionsVaultStorageV2,
+    OptionsVaultStorageV3
+{
 
 }
